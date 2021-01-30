@@ -39,7 +39,7 @@ var app = http.createServer(function(request,response){
   var pathname = url.parse(_url, true).pathname;
 
   if(pathname === '/'){
-    if(queryData.id === undefined){
+    if(queryData.nick === undefined){
       db.query(`SELECT * FROM user`, function(error,user){
         var title = 'PUSH-UP kING';
         var list = template.list(user);
@@ -50,9 +50,25 @@ var app = http.createServer(function(request,response){
     }
     else{
       db.query(`SELECT * FROM exercise AS ex JOIN user ON user.nick = ex.nick WHERE user.nick=?`,[queryData.nick],function(error,table){
-        var title = table[0].nick;
-        var list = template.exlist(table);
-        var html = template.HTML(title,list,'','',logonUI(request, response));
+        if(!table.length){
+          var list = '';
+        }
+        else{
+          var list = template.exlist(table);
+        }
+        var title = queryData.nick;
+        var control = `
+        <form action="/excreate_process" method="post">
+          <p><input type="text" name="title" placeholder="title"></p>
+          <p>
+            <textarea name="description" placeholder="description"></textarea>
+          </p>
+          <p>
+            <input type="submit">
+          </p>
+        </form>
+        `;
+        var html = template.HTML(title,list,'',control,logonUI(request, response));
         response.writeHead(200);
         response.end(html);
       });
@@ -166,5 +182,4 @@ var app = http.createServer(function(request,response){
       response.end('Not found');
     }
 });
-var host = '222.117.124.249'
-app.listen(3456,host);
+app.listen(3456);
