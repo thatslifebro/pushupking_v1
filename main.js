@@ -49,30 +49,139 @@ var app = http.createServer(function(request,response){
       });
     }
     else{
-      db.query(`SELECT * FROM exercise AS ex JOIN user ON user.nick = ex.nick WHERE user.nick=?`,[queryData.nick],function(error,table){
+      var cookies={};
+      if(request.headers.cookie){
+        cookies = cookie.parse(request.headers.cookie);
+      }
+      var title = queryData.nick;
+      var control='';
+      db.query(`SELECT * FROM exercise WHERE nick=?`,[queryData.nick],function(error,table){
         if(!table.length){
           var list = '';
         }
         else{
           var list = template.exlist(table);
         }
-        var title = queryData.nick;
-        var control = `
-        <form action="/excreate_process" method="post">
-          <p><input type="text" name="title" placeholder="title"></p>
-          <p>
-            <textarea name="description" placeholder="description"></textarea>
-          </p>
-          <p>
-            <input type="submit">
-          </p>
-        </form>
-        `;
-        var html = template.HTML(title,list,'',control,logonUI(request, response));
-        response.writeHead(200);
-        response.end(html);
+        db.query(`SELECT * FROM idpw WHERE nick=?`,[queryData.nick],function(error2,table2){
+          if(table2[0].password === cookies.code){
+            control = `
+            <form action="/excreate_process" method="post">
+              <input type="hidden" name='nick' value=${queryData.nick}>
+              <p><input type="text" name="title" placeholder="title"></p>
+              <p>
+                <textarea name="description" placeholder="description"></textarea>
+              </p>
+              <p>
+                <input type="submit">
+              </p>
+            </form>
+            `;
+          }
+          else{
+            control='';
+          }
+          var html = template.HTML(title,list,'',control,logonUI(request, response));
+          response.writeHead(200);
+          response.end(html);
+        });
       });
     }
+  }
+  else if(pathname === '/excreate_process'){
+    var body = '';
+    request.on('data', function(data){
+        body = body + data;
+    });
+    request.on('end', function(){
+        var post = qs.parse(body);
+        var title = post.title;
+        var description = post.description;
+        var nick = post.nick;
+        if (title.trim() === '') title = 'undefined';
+        db.query(`INSERT INTO exercise (title, description,time,nick) VALUES(?,?,NOW(),?)`,[title,description,nick], function(error,result){
+          if(error){
+            throw error;
+          }
+          response.writeHead(302, {Location: `/?nick=${qs.escape(nick)}`});
+          response.end();
+        })
+    });
+  }
+  else if(pathname === '/article'){
+    var title = 'article';
+    var cookies={};
+    if(request.headers.cookie){
+      cookies = cookie.parse(request.headers.cookie);
+    }
+    db.query(`SELECT * FROM idpw WHERE nick=?`,[queryData.nick],function(err1,table){
+      if(table[0].password === cookies.code){
+        db.query(`SELECT * FROM exercise WHERE id = ?`,[queryData.id],function(err2,table2){
+          var control = `
+          <form action="/delete_process" method="post">
+            <input type="hidden" name="id" value="${queryData.id}">
+            <input type="hidden" name='nick' value=${queryData.nick}>
+            <input type="submit" value="delete">
+          </form>
+          <form action='/update_process' method='post'>
+            <input type="hidden" name='id' value=${queryData.id}>
+            <input type="hidden" name='nick' value=${queryData.nick}>
+            <p><input type="text" name="title" value='${table2[0].title}'></p>
+            <p>
+              <textarea name="description">${table2[0].description}</textarea>
+            </p>
+            <p>
+              <input type="submit">
+            </p>
+          </form>
+          `;
+          var html = template.HTML(title,'','',control,logonUI(request, response));
+          response.writeHead(200);
+          response.end(html);
+        });
+      }
+      else{
+        var html = template.HTML(title,'','','<h3>It is not your article</h3>',logonUI(request, response));
+        response.writeHead(200);
+        response.end(html);
+      }
+    });
+  }
+  else if(pathname === '/delete_process'){
+    var body = '';
+    request.on('data', function(data){
+        body = body + data;
+    });
+    request.on('end', function(){
+        var post = qs.parse(body);
+        db.query(`DELETE FROM exercise WHERE id=?`,[post.id],function(error,result){
+          if(error){
+            throw error;
+          }
+          response.writeHead(302, {Location: `/?nick=${qs.escape(post.nick)}`});
+          response.end();
+        })
+    });
+  }
+  else if(pathname === '/update_process'){
+    var body = '';
+    request.on('data', function(data){
+        body = body + data;
+    });
+    request.on('end', function(){
+        var post = qs.parse(body);
+        var title = post.title;
+        var description = post.description;
+        var nick = post.nick;
+        var id = post.id;
+        if (title.trim() === '') title = 'undefined';
+        db.query(`UPDATE exercise SET title=?, description =? WHERE id = ?`,[title,description,id], function(error,result){
+          if(error){
+            throw error;
+          }
+          response.writeHead(302, {Location: `/?nick=${qs.escape(nick)}`});
+          response.end();
+        })
+    });
   }
   else if(pathname === '/login'){
     var title = 'login';
@@ -182,4 +291,4 @@ var app = http.createServer(function(request,response){
       response.end('Not found');
     }
 });
-app.listen(3456);
+app.listen(80);
