@@ -6,6 +6,7 @@ var template = require('./lib/template.js');
 var mysql = require('mysql');
 var crypto = require('crypto');
 var cookie = require('cookie');
+var sanitize = require('sanitize-html');
 
 var db = mysql.createConnection({
   host:'localhost',
@@ -94,9 +95,9 @@ var app = http.createServer(function(request,response){
     });
     request.on('end', function(){
         var post = qs.parse(body);
-        var title = post.title;
-        var description = post.description;
-        var nick = post.nick;
+        var title = sanitize(post.title);
+        var description = sanitize(post.description);
+        var nick = sanitize(post.nick);
         if (title.trim() === '') title = 'undefined';
         db.query(`INSERT INTO exercise (title, description,time,nick) VALUES(?,?,NOW(),?)`,[title,description,nick], function(error,result){
           if(error){
@@ -153,11 +154,13 @@ var app = http.createServer(function(request,response){
     });
     request.on('end', function(){
         var post = qs.parse(body);
-        db.query(`DELETE FROM exercise WHERE id=?`,[post.id],function(error,result){
+        var id = sanitize(post.id);
+        var nick = sanitize(post.nick);
+        db.query(`DELETE FROM exercise WHERE id=?`,[id],function(error,result){
           if(error){
             throw error;
           }
-          response.writeHead(302, {Location: `/?nick=${qs.escape(post.nick)}`});
+          response.writeHead(302, {Location: `/?nick=${qs.escape(nick)}`});
           response.end();
         })
     });
@@ -169,10 +172,10 @@ var app = http.createServer(function(request,response){
     });
     request.on('end', function(){
         var post = qs.parse(body);
-        var title = post.title;
-        var description = post.description;
-        var nick = post.nick;
-        var id = post.id;
+        var title = sanitize(post.title);
+        var description = sanitize(post.description);
+        var nick = sanitize(post.nick);
+        var id = sanitize(post.id);
         if (title.trim() === '') title = 'undefined';
         db.query(`UPDATE exercise SET title=?, description =? WHERE id = ?`,[title,description,id], function(error,result){
           if(error){
@@ -203,7 +206,9 @@ var app = http.createServer(function(request,response){
     });
     request.on('end',function(){
       var post = qs.parse(body);
-      db.query(`SELECT * FROM idpw WHERE id=?`,[post.ID],function(err,result){
+      var id = sanitize(post.ID);
+      var pw = sanitize(post.PW);
+      db.query(`SELECT * FROM idpw WHERE id=?`,[id],function(err,result){
         if(err) {
           response.writeHead(302, {Location: `/login_fail`});
           response.end();
@@ -212,7 +217,7 @@ var app = http.createServer(function(request,response){
 
           var salt ='';
           salt = salt+result[0].salt;
-          crypto.pbkdf2(post.PW, salt.toString('base64'), 100000, 64, 'sha512', async function(err, key){
+          crypto.pbkdf2(pw, salt.toString('base64'), 100000, 64, 'sha512', async function(err, key){
             var skey = key.toString('hex');
             if(skey === result[0].password){
               response.writeHead(302, {'Set-Cookie':[`code=${skey}`],Location: `/`});
@@ -252,18 +257,20 @@ var app = http.createServer(function(request,response){
     });
     request.on('end',function(){
       var post = qs.parse(body);
-
+      var pw = sanitize(post.PW);
+      var id = sanitize(post.ID);
+      var nick = sanitize(post.NICK);
       crypto.randomBytes(64, function(err, buf) {
         var ssalt = buf.toString('hex');
-        crypto.pbkdf2(post.PW, ssalt.toString('base64'), 100000, 64, 'sha512', async function(err, key){
+        crypto.pbkdf2(pw, ssalt.toString('base64'), 100000, 64, 'sha512', async function(err, key){
           var skey = key.toString('hex');
-          db.query(`INSERT INTO idpw (nick,ID,password,salt) VALUES(?,?,?,?)`,[post.NICK,post.ID,skey,ssalt],function(err,result){
+          db.query(`INSERT INTO idpw (nick,ID,password,salt) VALUES(?,?,?,?)`,[nick,id,skey,ssalt],function(err,result){
             if(err) {
               response.writeHead(302, {Location: `/register_fail`});
               response.end();
             }
             else {
-              db.query(`INSERT INTO user (nick) VALUES (?)`,[post.NICK],function(err,result){
+              db.query(`INSERT INTO user (nick) VALUES (?)`,[nick],function(err,result){
                 response.writeHead(302, {Location: `/`});
                 response.end();
               });
